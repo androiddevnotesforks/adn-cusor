@@ -25,11 +25,7 @@ def generate_response_stream(prompt, api_url, api_key, temperature, max_tokens, 
             {"role": "system", "content": "You are a test assistant."},
             {"role": "user", "content": prompt}
         ],
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-        "top_p": top_p,
-        "frequency_penalty": frequency_penalty,
-        "presence_penalty": presence_penalty,
+        "temperature": 0,
         "stream": True
     }
 
@@ -213,7 +209,7 @@ if feature == "Text Chat":
     # Add parameter controls
     st.sidebar.header("Text Chat Parameters")
     temperature = st.sidebar.slider("Temperature", 0.0, 2.0, 0.7, 0.1)
-    max_tokens = st.sidebar.number_input("Max Tokens", 1, 4096, 150)
+    max_tokens = st.sidebar.number_input("Max Tokens", 1, value=150)
     top_p = st.sidebar.slider("Top P", 0.0, 1.0, 1.0, 0.1)
     frequency_penalty = st.sidebar.slider("Frequency Penalty", -2.0, 2.0, 0.0, 0.1)
     presence_penalty = st.sidebar.slider("Presence Penalty", -2.0, 2.0, 0.0, 0.1)
