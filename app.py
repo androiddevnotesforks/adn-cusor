@@ -13,7 +13,7 @@ def setup_api():
     return api_url, api_key
 
 # Update generate_response function
-def generate_response_stream(prompt, api_url, api_key, temperature, max_tokens, top_p, frequency_penalty, presence_penalty):
+def generate_response_stream(messages, api_url, api_key, temperature, max_tokens, top_p, frequency_penalty, presence_penalty):
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}"
@@ -21,11 +21,12 @@ def generate_response_stream(prompt, api_url, api_key, temperature, max_tokens, 
     
     data = {
         "model": "grok-beta",
-        "messages": [
-            {"role": "system", "content": "You are a test assistant."},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "top_p": top_p,
+        "frequency_penalty": frequency_penalty,
+        "presence_penalty": presence_penalty,
         "stream": True
     }
 
@@ -204,7 +205,18 @@ api_url, api_key = setup_api()
 feature = st.radio("Choose a feature:", ("Text Chat", "Local Image Vision", "Web URL Image Vision", "API Key Info", "List Models", "Get Model", "Create Embeddings"))
 
 if feature == "Text Chat":
-    user_input = st.text_area("Enter your message:", height=100)
+    # Initialize chat history
+    if "messages" not in st.session_state:
+        st.session_state.messages = [
+            {"role": "system", "content": "You are a test assistant."}
+        ]
+
+    # Display chat history
+    for message in st.session_state.messages[1:]:  # Skip the system message
+        st.text(f"{message['role'].capitalize()}: {message['content']}")
+
+    # User input
+    user_input = st.text_input("Enter your message:")
 
     # Add parameter controls
     st.sidebar.header("Text Chat Parameters")
@@ -215,17 +227,22 @@ if feature == "Text Chat":
     presence_penalty = st.sidebar.slider("Presence Penalty", -2.0, 2.0, 0.0, 0.1)
 
     if st.button("Send"):
-        if user_input and api_url and api_key:
+        if user_input:
+            # Add user message to chat history
+            st.session_state.messages.append({"role": "user", "content": user_input})
+            st.text(f"User: {user_input}")
+
+            # Generate response
             response_container = st.empty()
             full_response = ""
-            for chunk in generate_response_stream(user_input, f"{api_url}/chat/completions", api_key, temperature, max_tokens, top_p, frequency_penalty, presence_penalty):
+            for chunk in generate_response_stream(st.session_state.messages, f"{api_url}/chat/completions", api_key, temperature, max_tokens, top_p, frequency_penalty, presence_penalty):
                 full_response += chunk
-                response_container.markdown(full_response + "▌")
-            response_container.markdown(full_response)
-        elif not user_input:
-            st.warning("Please enter a message.")
+                response_container.text(f"Assistant: {full_response}")
+            
+            # Add assistant response to chat history
+            st.session_state.messages.append({"role": "assistant", "content": full_response})
         else:
-            st.warning("Please provide both API URL and API Key in the sidebar.")
+            st.warning("Please enter a message.")
 
 elif feature == "Local Image Vision":
     uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
