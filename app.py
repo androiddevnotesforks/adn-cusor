@@ -17,9 +17,13 @@ def generate_response(prompt, api_url, api_key):
     }
     
     data = {
-        "model": "gpt-3.5-turbo",  # Adjust this to match your API's model name
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.7
+        "model": "grok-beta",
+        "messages": [
+            {"role": "system", "content": "You are a test assistant."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0,
+        "stream": False
     }
 
     response = requests.post(api_url, headers=headers, json=data)
@@ -30,7 +34,7 @@ def generate_response(prompt, api_url, api_key):
         return f"Error: {response.status_code}, {response.text}"
 
 # Streamlit UI
-st.title("X.AI Chat API Demo")
+st.title("X.AI Grok-beta Chat API Demo")
 
 # Setup API in sidebar
 api_url, api_key = setup_api()
@@ -49,4 +53,4 @@ if st.button("Send"):
 
 # Add a sidebar with some information
 st.sidebar.header("About")
-st.sidebar.info("This is a demo of the X.AI Chat API using Streamlit.")
+st.sidebar.info("This is a demo of the X.AI Grok-beta Chat API using Streamlit.")
