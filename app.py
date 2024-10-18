@@ -10,7 +10,7 @@ def setup_api():
     return api_url, api_key
 
 # Update generate_response function
-def generate_response(prompt, api_url, api_key):
+def generate_response_stream(prompt, api_url, api_key):
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}"
@@ -23,18 +23,30 @@ def generate_response(prompt, api_url, api_key):
             {"role": "user", "content": prompt}
         ],
         "temperature": 0,
-        "stream": False
+        "stream": True
     }
 
-    response = requests.post(api_url, headers=headers, json=data)
-    
-    if response.status_code == 200:
-        return response.json()['choices'][0]['message']['content']
-    else:
-        return f"Error: {response.status_code}, {response.text}"
+    with requests.post(api_url, headers=headers, json=data, stream=True) as response:
+        if response.status_code == 200:
+            for line in response.iter_lines():
+                if line:
+                    line = line.decode('utf-8')
+                    if line.startswith('data: '):
+                        line = line[6:]  # Remove 'data: ' prefix
+                        if line.strip() == '[DONE]':
+                            break
+                        try:
+                            json_object = json.loads(line)
+                            content = json_object['choices'][0]['delta'].get('content', '')
+                            if content:
+                                yield content
+                        except json.JSONDecodeError:
+                            continue
+        else:
+            yield f"Error: {response.status_code}, {response.text}"
 
 # Streamlit UI
-st.title("X.AI Grok-beta Chat API Demo")
+st.title("X.AI Grok-beta Chat API Demo (Streaming)")
 
 # Setup API in sidebar
 api_url, api_key = setup_api()
@@ -43,9 +55,12 @@ user_input = st.text_area("Enter your message:", height=100)
 
 if st.button("Send"):
     if user_input and api_url and api_key:
-        with st.spinner("Generating response..."):
-            response = generate_response(user_input, api_url, api_key)
-        st.text_area("API Response:", value=response, height=300)
+        response_container = st.empty()
+        full_response = ""
+        for chunk in generate_response_stream(user_input, api_url, api_key):
+            full_response += chunk
+            response_container.markdown(full_response + "▌")
+        response_container.markdown(full_response)
     elif not user_input:
         st.warning("Please enter a message.")
     else:
@@ -53,4 +68,4 @@ if st.button("Send"):
 
 # Add a sidebar with some information
 st.sidebar.header("About")
-st.sidebar.info("This is a demo of the X.AI Grok-beta Chat API using Streamlit.")
+st.sidebar.info("This is a demo of the X.AI Grok-beta Chat API using Streamlit with streaming responses.")
