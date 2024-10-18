@@ -8,7 +8,7 @@ from openai import OpenAI
 # Move API setup to a function
 def setup_api():
     st.sidebar.header("API Settings")
-    api_url = st.sidebar.text_input("API Base URL", "https://api.x.ai/v1/chat/completions")
+    api_url = st.sidebar.text_input("API Base URL", "https://api.x.ai/v1")
     api_key = st.sidebar.text_input("API Key", "xai-no4Zu9rW2jgq5BrdTVC1Im7kKNGGaOA71MS40gT8QdqATaWkFp0fA1JgggDhmyjJEnMdySFFpLnmEiiB", type="password")
     return api_url, api_key
 
@@ -89,23 +89,97 @@ def generate_vision_response(image, prompt, api_url, api_key):
         if chunk.choices[0].delta.content is not None:
             yield chunk.choices[0].delta.content
 
+def local_image_vision(image_file, prompt, api_url, api_key):
+    client = OpenAI(
+        api_key=api_key,
+        base_url=api_url,
+    )
+
+    base64_image = encode_image(image_file)
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{base64_image}",
+                        "detail": "high",
+                    },
+                },
+                {
+                    "type": "text",
+                    "text": prompt,
+                },
+            ],
+        },
+    ]
+
+    stream = client.chat.completions.create(
+        model="grok-2v-mini",
+        messages=messages,
+        stream=True,
+        temperature=0.01,
+    )
+
+    for chunk in stream:
+        if chunk.choices[0].delta.content is not None:
+            yield chunk.choices[0].delta.content
+
+def web_url_vision(image_url, prompt, api_url, api_key):
+    client = OpenAI(
+        api_key=api_key,
+        base_url=api_url,
+    )
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": image_url,
+                        "detail": "high",
+                    },
+                },
+                {
+                    "type": "text",
+                    "text": prompt,
+                },
+            ],
+        },
+    ]
+
+    stream = client.chat.completions.create(
+        model="grok-2v-mini",
+        messages=messages,
+        stream=True,
+        temperature=0.01,
+    )
+
+    for chunk in stream:
+        if chunk.choices[0].delta.content is not None:
+            yield chunk.choices[0].delta.content
+
 # Streamlit UI
 st.title("X.AI Grok-beta Chat API Demo (Streaming)")
 
 # Setup API in sidebar
 api_url, api_key = setup_api()
 
-# Add a radio button to choose between text and image input
-input_type = st.radio("Choose input type:", ("Text", "Image"))
+# Add a radio button to choose between different features
+feature = st.radio("Choose a feature:", ("Text Chat", "Local Image Vision", "Web URL Image Vision"))
 
-if input_type == "Text":
+if feature == "Text Chat":
     user_input = st.text_area("Enter your message:", height=100)
 
     if st.button("Send"):
         if user_input and api_url and api_key:
             response_container = st.empty()
             full_response = ""
-            for chunk in generate_response_stream(user_input, api_url, api_key):
+            for chunk in generate_response_stream(user_input, f"{api_url}/chat/completions", api_key):
                 full_response += chunk
                 response_container.markdown(full_response + "▌")
             response_container.markdown(full_response)
@@ -114,7 +188,7 @@ if input_type == "Text":
         else:
             st.warning("Please provide both API URL and API Key in the sidebar.")
 
-else:  # Image input
+elif feature == "Local Image Vision":
     uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
     if uploaded_file is not None:
         st.image(uploaded_file, caption="Uploaded Image.", use_column_width=True)
@@ -124,7 +198,26 @@ else:  # Image input
             if user_input and api_url and api_key:
                 response_container = st.empty()
                 full_response = ""
-                for chunk in generate_vision_response(uploaded_file, user_input, api_url, api_key):
+                for chunk in local_image_vision(uploaded_file, user_input, api_url, api_key):
+                    full_response += chunk
+                    response_container.markdown(full_response + "▌")
+                response_container.markdown(full_response)
+            elif not user_input:
+                st.warning("Please ask a question about the image.")
+            else:
+                st.warning("Please provide both API URL and API Key in the sidebar.")
+
+else:  # Web URL Image Vision
+    image_url = st.text_input("Enter the URL of the image:")
+    if image_url:
+        st.image(image_url, caption="Image from URL.", use_column_width=True)
+        user_input = st.text_area("Ask a question about the image:", height=100)
+
+        if st.button("Analyze"):
+            if user_input and api_url and api_key:
+                response_container = st.empty()
+                full_response = ""
+                for chunk in web_url_vision(image_url, user_input, api_url, api_key):
                     full_response += chunk
                     response_container.markdown(full_response + "▌")
                 response_container.markdown(full_response)
@@ -135,4 +228,4 @@ else:  # Image input
 
 # Add a sidebar with some information
 st.sidebar.header("About")
-st.sidebar.info("This is a demo of the X.AI Grok-beta Chat API using Streamlit with streaming responses and vision capabilities.")
+st.sidebar.info("This is a demo of the X.AI Grok-beta Chat API using Streamlit with streaming responses, local image vision, and web URL image vision capabilities.")
