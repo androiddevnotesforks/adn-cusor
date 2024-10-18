@@ -1,6 +1,9 @@
 import streamlit as st
 import requests
 import json
+import os
+import base64
+from openai import OpenAI
 
 # Move API setup to a function
 def setup_api():
@@ -45,27 +48,91 @@ def generate_response_stream(prompt, api_url, api_key):
         else:
             yield f"Error: {response.status_code}, {response.text}"
 
+def encode_image(image_file):
+    return base64.b64encode(image_file.getvalue()).decode("utf-8")
+
+def generate_vision_response(image, prompt, api_url, api_key):
+    client = OpenAI(
+        api_key=api_key,
+        base_url=api_url.rsplit('/', 1)[0],  # Remove '/chat/completions' from the end
+    )
+
+    base64_image = encode_image(image)
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{base64_image}",
+                        "detail": "high",
+                    },
+                },
+                {
+                    "type": "text",
+                    "text": prompt,
+                },
+            ],
+        },
+    ]
+
+    stream = client.chat.completions.create(
+        model="grok-2v-mini",
+        messages=messages,
+        stream=True,
+        temperature=0.01,
+    )
+
+    for chunk in stream:
+        if chunk.choices[0].delta.content is not None:
+            yield chunk.choices[0].delta.content
+
 # Streamlit UI
 st.title("X.AI Grok-beta Chat API Demo (Streaming)")
 
 # Setup API in sidebar
 api_url, api_key = setup_api()
 
-user_input = st.text_area("Enter your message:", height=100)
+# Add a radio button to choose between text and image input
+input_type = st.radio("Choose input type:", ("Text", "Image"))
 
-if st.button("Send"):
-    if user_input and api_url and api_key:
-        response_container = st.empty()
-        full_response = ""
-        for chunk in generate_response_stream(user_input, api_url, api_key):
-            full_response += chunk
-            response_container.markdown(full_response + "▌")
-        response_container.markdown(full_response)
-    elif not user_input:
-        st.warning("Please enter a message.")
-    else:
-        st.warning("Please provide both API URL and API Key in the sidebar.")
+if input_type == "Text":
+    user_input = st.text_area("Enter your message:", height=100)
+
+    if st.button("Send"):
+        if user_input and api_url and api_key:
+            response_container = st.empty()
+            full_response = ""
+            for chunk in generate_response_stream(user_input, api_url, api_key):
+                full_response += chunk
+                response_container.markdown(full_response + "▌")
+            response_container.markdown(full_response)
+        elif not user_input:
+            st.warning("Please enter a message.")
+        else:
+            st.warning("Please provide both API URL and API Key in the sidebar.")
+
+else:  # Image input
+    uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+    if uploaded_file is not None:
+        st.image(uploaded_file, caption="Uploaded Image.", use_column_width=True)
+        user_input = st.text_area("Ask a question about the image:", height=100)
+
+        if st.button("Analyze"):
+            if user_input and api_url and api_key:
+                response_container = st.empty()
+                full_response = ""
+                for chunk in generate_vision_response(uploaded_file, user_input, api_url, api_key):
+                    full_response += chunk
+                    response_container.markdown(full_response + "▌")
+                response_container.markdown(full_response)
+            elif not user_input:
+                st.warning("Please ask a question about the image.")
+            else:
+                st.warning("Please provide both API URL and API Key in the sidebar.")
 
 # Add a sidebar with some information
 st.sidebar.header("About")
-st.sidebar.info("This is a demo of the X.AI Grok-beta Chat API using Streamlit with streaming responses.")
+st.sidebar.info("This is a demo of the X.AI Grok-beta Chat API using Streamlit with streaming responses and vision capabilities.")
