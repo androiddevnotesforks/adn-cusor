@@ -163,14 +163,45 @@ def web_url_vision(image_url, prompt, api_url, api_key):
         if chunk.choices[0].delta.content is not None:
             yield chunk.choices[0].delta.content
 
+# New functions for REST API features
+
+def get_api_key_info(api_url, api_key):
+    url = f"{api_url}/api-key"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    response = requests.get(url, headers=headers)
+    return response.json() if response.status_code == 200 else f"Error: {response.status_code}, {response.text}"
+
+def list_models(api_url, api_key):
+    url = f"{api_url}/models"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    response = requests.get(url, headers=headers)
+    return response.json() if response.status_code == 200 else f"Error: {response.status_code}, {response.text}"
+
+def get_model(api_url, api_key, model_id):
+    url = f"{api_url}/models/{model_id}"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    response = requests.get(url, headers=headers)
+    return response.json() if response.status_code == 200 else f"Error: {response.status_code}, {response.text}"
+
+def create_embeddings(api_url, api_key, input_text, model):
+    url = f"{api_url}/embeddings"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    data = {
+        "input": input_text,
+        "model": model,
+        "encoding_format": "float"
+    }
+    response = requests.post(url, headers=headers, json=data)
+    return response.json() if response.status_code == 200 else f"Error: {response.status_code}, {response.text}"
+
 # Streamlit UI
-st.title("X.AI Grok-beta Chat API Demo (Streaming)")
+st.title("X.AI Grok-beta API Demo")
 
 # Setup API in sidebar
 api_url, api_key = setup_api()
 
 # Add a radio button to choose between different features
-feature = st.radio("Choose a feature:", ("Text Chat", "Local Image Vision", "Web URL Image Vision"))
+feature = st.radio("Choose a feature:", ("Text Chat", "Local Image Vision", "Web URL Image Vision", "API Key Info", "List Models", "Get Model", "Create Embeddings"))
 
 if feature == "Text Chat":
     user_input = st.text_area("Enter your message:", height=100)
@@ -207,7 +238,7 @@ elif feature == "Local Image Vision":
             else:
                 st.warning("Please provide both API URL and API Key in the sidebar.")
 
-else:  # Web URL Image Vision
+elif feature == "Web URL Image Vision":
     image_url = st.text_input("Enter the URL of the image:")
     if image_url:
         st.image(image_url, caption="Image from URL.", use_column_width=True)
@@ -226,6 +257,41 @@ else:  # Web URL Image Vision
             else:
                 st.warning("Please provide both API URL and API Key in the sidebar.")
 
+elif feature == "API Key Info":
+    if st.button("Get API Key Info"):
+        if api_url and api_key:
+            info = get_api_key_info(api_url, api_key)
+            st.json(info)
+        else:
+            st.warning("Please provide both API URL and API Key in the sidebar.")
+
+elif feature == "List Models":
+    if st.button("List Models"):
+        if api_url and api_key:
+            models = list_models(api_url, api_key)
+            st.json(models)
+        else:
+            st.warning("Please provide both API URL and API Key in the sidebar.")
+
+elif feature == "Get Model":
+    model_id = st.text_input("Enter Model ID:")
+    if st.button("Get Model Info"):
+        if api_url and api_key and model_id:
+            model_info = get_model(api_url, api_key, model_id)
+            st.json(model_info)
+        else:
+            st.warning("Please provide API URL, API Key, and Model ID.")
+
+elif feature == "Create Embeddings":
+    input_text = st.text_area("Enter text for embedding:")
+    model = st.text_input("Enter embedding model name:", value="v1")
+    if st.button("Create Embeddings"):
+        if api_url and api_key and input_text:
+            embeddings = create_embeddings(api_url, api_key, [input_text], model)
+            st.json(embeddings)
+        else:
+            st.warning("Please provide API URL, API Key, and input text.")
+
 # Add a sidebar with some information
 st.sidebar.header("About")
-st.sidebar.info("This is a demo of the X.AI Grok-beta Chat API using Streamlit with streaming responses, local image vision, and web URL image vision capabilities.")
+st.sidebar.info("This is a demo of the X.AI Grok-beta API using Streamlit with various features including chat, image vision, and REST API capabilities.")
