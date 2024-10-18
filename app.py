@@ -13,7 +13,7 @@ def setup_api():
     return api_url, api_key
 
 # Update generate_response function
-def generate_response_stream(prompt, api_url, api_key):
+def generate_response_stream(prompt, api_url, api_key, temperature, max_tokens, top_p, frequency_penalty, presence_penalty):
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}"
@@ -25,7 +25,11 @@ def generate_response_stream(prompt, api_url, api_key):
             {"role": "system", "content": "You are a test assistant."},
             {"role": "user", "content": prompt}
         ],
-        "temperature": 0,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "top_p": top_p,
+        "frequency_penalty": frequency_penalty,
+        "presence_penalty": presence_penalty,
         "stream": True
     }
 
@@ -183,13 +187,13 @@ def get_model(api_url, api_key, model_id):
     response = requests.get(url, headers=headers)
     return response.json() if response.status_code == 200 else f"Error: {response.status_code}, {response.text}"
 
-def create_embeddings(api_url, api_key, input_text, model):
+def create_embeddings(api_url, api_key, input_text, model, encoding_format):
     url = f"{api_url}/embeddings"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     data = {
         "input": input_text,
         "model": model,
-        "encoding_format": "float"
+        "encoding_format": encoding_format
     }
     response = requests.post(url, headers=headers, json=data)
     return response.json() if response.status_code == 200 else f"Error: {response.status_code}, {response.text}"
@@ -206,11 +210,19 @@ feature = st.radio("Choose a feature:", ("Text Chat", "Local Image Vision", "Web
 if feature == "Text Chat":
     user_input = st.text_area("Enter your message:", height=100)
 
+    # Add parameter controls
+    st.sidebar.header("Text Chat Parameters")
+    temperature = st.sidebar.slider("Temperature", 0.0, 2.0, 0.7, 0.1)
+    max_tokens = st.sidebar.number_input("Max Tokens", 1, 4096, 150)
+    top_p = st.sidebar.slider("Top P", 0.0, 1.0, 1.0, 0.1)
+    frequency_penalty = st.sidebar.slider("Frequency Penalty", -2.0, 2.0, 0.0, 0.1)
+    presence_penalty = st.sidebar.slider("Presence Penalty", -2.0, 2.0, 0.0, 0.1)
+
     if st.button("Send"):
         if user_input and api_url and api_key:
             response_container = st.empty()
             full_response = ""
-            for chunk in generate_response_stream(user_input, f"{api_url}/chat/completions", api_key):
+            for chunk in generate_response_stream(user_input, f"{api_url}/chat/completions", api_key, temperature, max_tokens, top_p, frequency_penalty, presence_penalty):
                 full_response += chunk
                 response_container.markdown(full_response + "▌")
             response_container.markdown(full_response)
@@ -284,10 +296,15 @@ elif feature == "Get Model":
 
 elif feature == "Create Embeddings":
     input_text = st.text_area("Enter text for embedding:")
-    model = st.text_input("Enter embedding model name:", value="v1")
+    
+    # Add parameter controls
+    st.sidebar.header("Embedding Parameters")
+    model = st.sidebar.text_input("Enter embedding model name:", value="v1")
+    encoding_format = st.sidebar.selectbox("Encoding Format", ["float", "base64"])
+
     if st.button("Create Embeddings"):
         if api_url and api_key and input_text:
-            embeddings = create_embeddings(api_url, api_key, [input_text], model)
+            embeddings = create_embeddings(api_url, api_key, [input_text], model, encoding_format)
             st.json(embeddings)
         else:
             st.warning("Please provide API URL, API Key, and input text.")
